@@ -9,10 +9,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Deploy to server
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Rsync files to server
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude '__pycache__' \
+            --exclude '.pytest_cache' \
+            --exclude '.ruff_cache' \
+            --exclude 'app/ml/model' \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/bank-marketing-predictor/
+
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -25,23 +41,7 @@ jobs:
             DEPLOY_DIR=/opt/$APP
             CONTAINER_PORT=8501
 
-            # Fix git ownership issue
-            git config --global --add safe.directory $DEPLOY_DIR
-
-            mkdir -p $DEPLOY_DIR
             cd $DEPLOY_DIR
-
-            # Pull or clone repo
-            if [ -d .git ]; then
-              echo ">> Existing git repository, pulling latest code"
-              git fetch origin main
-              git reset --hard origin/main
-            else
-              echo ">> Not a git repository, cloning fresh"
-              rm -rf * .* 2>/dev/null || true
-              git clone --depth 1 --branch main \
-                https://github.com/${{ github.repository }}.git .
-            fi
 
             # Find available port
             port_in_use() {
