@@ -66,14 +66,26 @@ jobs:
 
             echo ">> Deploying to fixed port $HOST_PORT"
 
-            # Run new container
+            # Ensure model persistence directory exists
+            mkdir -p /opt/bank-marketing-model
+
+            # Run new container with persistent model volume
             docker run -d \
               --name $APP \
               --restart unless-stopped \
               -p ${HOST_PORT}:${CONTAINER_PORT} \
+              -v /opt/bank-marketing-model:/app/app/ml/model \
               $APP:latest
 
             sleep 5
+
+            # Auto-train if model is missing (first deploy or after model dir cleanup)
+            if [ ! -f /opt/bank-marketing-model/model.joblib ]; then
+              echo ">> Model not found, training..."
+              docker exec $APP python -m app.ml.train || echo "[WARN] Training failed"
+            else
+              echo ">> Model already exists, skipping training"
+            fi
 
             # Health check
             curl -fsS --retry 5 --retry-delay 3 \
