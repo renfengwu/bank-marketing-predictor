@@ -27,8 +27,8 @@ htmlcov/
 # Model artifacts (trained models)
 app/ml/model/
 
-# Data files (CSV data ~3.5MB)
-data/*.csv
+# Data files are tracked in Git (~3.5MB total, needed for Docker build)
+# Model artifacts stay ignored
 
 # Environment
 .env

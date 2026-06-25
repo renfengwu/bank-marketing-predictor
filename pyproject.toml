@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = [
+    "N806",  # sklearn convention: X, X_train, y_pred etc.
+    "N802",  # test function names may contain X_, y_ for clarity
+    "N999",  # Streamlit requires 01_*.py naming for multi-page apps
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.coverage.run]
+omit = [
+    "app/main.py",
+    "app/pages/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
