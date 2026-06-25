@@ -7,10 +7,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Deploy via SSH
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -21,22 +23,24 @@ jobs:
 
             APP=bank-marketing-predictor
             DEPLOY_DIR=/opt/$APP
-            PORT=8501
-            PORT_MAX=8510
             CONTAINER_PORT=8501
 
-            # Prepare deployment directory
-            sudo mkdir -p $DEPLOY_DIR
-            sudo chown -R $USER:$USER $DEPLOY_DIR
+            # Fix git ownership issue
+            git config --global --add safe.directory $DEPLOY_DIR
 
-            # Copy repo files (via rsync from runner — we use a self-copy approach here)
-            # Since we can't rsync from runner, we pull from GitHub inside the script:
+            mkdir -p $DEPLOY_DIR
             cd $DEPLOY_DIR
+
+            # Pull or clone repo
             if [ -d .git ]; then
+              echo ">> Existing git repository, pulling latest code"
               git fetch origin main
               git reset --hard origin/main
             else
-              git clone --depth 1 --branch main https://github.com/${{ github.repository }}.git .
+              echo ">> Not a git repository, cloning fresh"
+              rm -rf * .* 2>/dev/null || true
+              git clone --depth 1 --branch main \
+                https://github.com/${{ github.repository }}.git .
             fi
 
             # Find available port
@@ -45,7 +49,8 @@ jobs:
               docker ps --format "{{.Ports}}" 2>/dev/null | grep -q ":$1->" && return 0
               return 1
             }
-            PORT=""
+            PORT=8501
+            PORT_MAX=8510
             for p in $(seq $PORT $PORT_MAX); do
               if ! port_in_use "$p"; then PORT="$p"; break; fi
             done
@@ -57,8 +62,15 @@ jobs:
               --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
               -t $APP:latest .
 
-            # Stop & remove old container (idempotent)
+            # Stop & remove old container
             docker rm -f $APP 2>/dev/null || true
+
+            # Wait for port release
+            for i in $(seq 1 10); do
+              if ! port_in_use "$PORT"; then echo ">> Port $PORT is free"; break; fi
+              echo ">> Port $PORT still busy, waiting... ($i/10)"
+              sleep 1
+            done
 
             # Run new container
             docker run -d \
@@ -69,7 +81,8 @@ jobs:
 
             sleep 5
 
-            # Health check
-            curl -fsS --retry 3 --retry-delay 2 "http://localhost:${PORT}/"
+            # Health check (Streamlit built-in endpoint)
+            curl -fsS --retry 5 --retry-delay 3 \
+              "http://localhost:${PORT}/_stcore/health"
             echo ""
             echo ">> Deploy success: http://${{ secrets.SSH_HOST }}:${PORT}"
