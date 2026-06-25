@@ -1,0 +1,75 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            APP=bank-marketing-predictor
+            DEPLOY_DIR=/opt/$APP
+            PORT=8501
+            PORT_MAX=8510
+            CONTAINER_PORT=8501
+
+            # Prepare deployment directory
+            sudo mkdir -p $DEPLOY_DIR
+            sudo chown -R $USER:$USER $DEPLOY_DIR
+
+            # Copy repo files (via rsync from runner — we use a self-copy approach here)
+            # Since we can't rsync from runner, we pull from GitHub inside the script:
+            cd $DEPLOY_DIR
+            if [ -d .git ]; then
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              git clone --depth 1 --branch main https://github.com/${{ github.repository }}.git .
+            fi
+
+            # Find available port
+            port_in_use() {
+              ss -ltnH 2>/dev/null | grep -q ":$1 " && return 0
+              docker ps --format "{{.Ports}}" 2>/dev/null | grep -q ":$1->" && return 0
+              return 1
+            }
+            PORT=""
+            for p in $(seq $PORT $PORT_MAX); do
+              if ! port_in_use "$p"; then PORT="$p"; break; fi
+            done
+            [ -z "$PORT" ] && { echo "All ports in $PORT-$PORT_MAX are occupied"; exit 1; }
+            echo ">> Deploying to host port $PORT"
+
+            # Build Docker image
+            docker build \
+              --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
+              -t $APP:latest .
+
+            # Stop & remove old container (idempotent)
+            docker rm -f $APP 2>/dev/null || true
+
+            # Run new container
+            docker run -d \
+              --name $APP \
+              --restart unless-stopped \
+              -p ${PORT}:${CONTAINER_PORT} \
+              $APP:latest
+
+            sleep 5
+
+            # Health check
+            curl -fsS --retry 3 --retry-delay 2 "http://localhost:${PORT}/"
+            echo ""
+            echo ">> Deploy success: http://${{ secrets.SSH_HOST }}:${PORT}"
