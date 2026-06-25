@@ -17,6 +17,9 @@ COPY data/ ./data/
 # Copy pyproject.toml for any runtime config needs
 COPY pyproject.toml .
 
+# Ensure /app is on Python path so 'app' package is importable
+ENV PYTHONPATH=/app
+
 EXPOSE 8501
 
 # Streamlit default: port 8501, bind to 0.0.0.0
