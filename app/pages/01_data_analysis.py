@@ -14,7 +14,7 @@ from app.models.visualizer import (
     data_overview,
 )
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "test.csv"
+DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "train.csv"
 
 st.set_page_config(page_title="数据分析", page_icon="📊", layout="wide")
 
