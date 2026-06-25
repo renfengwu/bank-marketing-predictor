@@ -13,8 +13,9 @@ def test_core_modules_import():
 
 def test_data_files_exist():
     """Verify the data/ directory contains CSV files (local dev only)."""
-    import pytest
     from pathlib import Path
+
+    import pytest
 
     data_dir = Path(__file__).resolve().parents[1] / "data"
     if not data_dir.is_dir():
