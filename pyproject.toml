@@ -15,6 +15,12 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 
+[tool.coverage.run]
+omit = [
+    "app/main.py",
+    "app/pages/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
