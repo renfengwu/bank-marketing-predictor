@@ -58,7 +58,7 @@ with st.form("prediction_form"):
                 min_value=float(mn),
                 max_value=float(mx),
                 value=float(default),
-                step=0.1 if isinstance(default, float) else 1,
+                step=0.1 if isinstance(default, float) else 1.0,
                 format="%.1f" if isinstance(default, float) else "%d",
             )
 
